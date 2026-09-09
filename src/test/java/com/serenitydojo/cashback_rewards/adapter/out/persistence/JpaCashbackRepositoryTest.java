@@ -9,6 +9,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -25,7 +26,7 @@ class JpaCashbackRepositoryTest {
     @Test
     @DisplayName("returns the cashback record previously saved for a given customer")
     void findsSavedCashbackRecordByCustomerId() {
-        repository.save(new CashbackRecord("cust-001", "GreenGrocer", "Groceries", new BigDecimal("2.40")));
+        repository.save(new CashbackRecord("cust-001", "GreenGrocer", "Groceries", new BigDecimal("2.40"), Instant.parse("2026-01-01T00:00:00Z")));
 
         assertThat(repository.findByCustomerId("cust-001"))
                 .singleElement()
@@ -40,9 +41,9 @@ class JpaCashbackRepositoryTest {
     @Test
     @DisplayName("returns every record earned by a customer and excludes other customers' records")
     void returnsAllRecordsForACustomerAndExcludesOthers() {
-        repository.save(new CashbackRecord("cust-001", "GreenGrocer", "Groceries", new BigDecimal("2.40")));
-        repository.save(new CashbackRecord("cust-001", "FuelCo", "Fuel", new BigDecimal("1.00")));
-        repository.save(new CashbackRecord("cust-999", "OtherShop", "Other", new BigDecimal("0.50")));
+        repository.save(new CashbackRecord("cust-001", "GreenGrocer", "Groceries", new BigDecimal("2.40"), Instant.parse("2026-01-01T00:00:00Z")));
+        repository.save(new CashbackRecord("cust-001", "FuelCo", "Fuel", new BigDecimal("1.00"), Instant.parse("2026-01-01T00:00:00Z")));
+        repository.save(new CashbackRecord("cust-999", "OtherShop", "Other", new BigDecimal("0.50"), Instant.parse("2026-01-01T00:00:00Z")));
 
         assertThat(repository.findByCustomerId("cust-001"))
                 .extracting(CashbackRecord::merchantName, CashbackRecord::productCategory)
@@ -54,9 +55,9 @@ class JpaCashbackRepositoryTest {
     @Test
     @DisplayName("totals the cashback paid for a product category across all customers")
     void totalsCashbackForAProductCategoryAcrossCustomers() {
-        repository.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40")));
-        repository.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60")));
-        repository.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00")));
+        repository.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40"), Instant.parse("2026-01-01T00:00:00Z")));
+        repository.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60"), Instant.parse("2026-01-01T00:00:00Z")));
+        repository.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00"), Instant.parse("2026-01-01T00:00:00Z")));
 
         assertThat(repository.totalForProductCategory("Groceries")).isEqualByComparingTo("4.00");
     }
@@ -70,9 +71,9 @@ class JpaCashbackRepositoryTest {
     @Test
     @DisplayName("counts the cashback records for a product category across all customers")
     void countsCashbackRecordsForAProductCategoryAcrossCustomers() {
-        repository.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40")));
-        repository.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60")));
-        repository.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00")));
+        repository.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40"), Instant.parse("2026-01-01T00:00:00Z")));
+        repository.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60"), Instant.parse("2026-01-01T00:00:00Z")));
+        repository.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00"), Instant.parse("2026-01-01T00:00:00Z")));
 
         assertThat(repository.countForProductCategory("Groceries")).isEqualTo(2L);
     }

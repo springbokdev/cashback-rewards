@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,9 +18,9 @@ class TotalProductCashbackServiceTest {
     @DisplayName("totals the cashback paid for a product across all customers, excluding other products")
     void totalsCashbackAcrossCustomersForAProduct() {
         InMemoryCashbackRepository cashbacks = new InMemoryCashbackRepository();
-        cashbacks.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40")));
-        cashbacks.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60")));
-        cashbacks.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00")));
+        cashbacks.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40"), Instant.parse("2026-01-01T00:00:00Z")));
+        cashbacks.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60"), Instant.parse("2026-01-01T00:00:00Z")));
+        cashbacks.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00"), Instant.parse("2026-01-01T00:00:00Z")));
         TotalProductCashbackService service = new TotalProductCashbackService(cashbacks);
 
         assertThat(service.totalFor("Groceries").totalCashback()).isEqualByComparingTo("4.00");
@@ -29,9 +30,9 @@ class TotalProductCashbackServiceTest {
     @DisplayName("reports the product name and the number of cashback payments counted")
     void reportsProductNameAndPaymentCount() {
         InMemoryCashbackRepository cashbacks = new InMemoryCashbackRepository();
-        cashbacks.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40")));
-        cashbacks.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60")));
-        cashbacks.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00")));
+        cashbacks.save(new CashbackRecord("cust-001", "Market-A", "Groceries", new BigDecimal("2.40"), Instant.parse("2026-01-01T00:00:00Z")));
+        cashbacks.save(new CashbackRecord("cust-002", "Market-B", "Groceries", new BigDecimal("1.60"), Instant.parse("2026-01-01T00:00:00Z")));
+        cashbacks.save(new CashbackRecord("cust-003", "FuelCo", "Fuel", new BigDecimal("5.00"), Instant.parse("2026-01-01T00:00:00Z")));
         TotalProductCashbackService service = new TotalProductCashbackService(cashbacks);
 
         ProductCashbackTotal total = service.totalFor("Groceries");

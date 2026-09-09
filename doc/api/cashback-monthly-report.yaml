@@ -1,0 +1,285 @@
+openapi: 3.0.3
+info:
+  title: Cashback Rewards API — Monthly Report
+  description: |
+    Contract for the customer-facing monthly cashback report, driven by
+    doc/specs/cashback-monthly-report.md.
+
+    ## Open questions carried over from Example Mapping (unresolved — flagged, not decided)
+    This draft makes an explicit, documented assumption for each open question below
+    so the contract is concrete enough to review. Every assumption is called out inline
+    on the relevant schema/parameter via its `description`. None of these are final.
+
+    - Can a member request the current month-to-date, or only completed past months?
+      **Assumed:** any month, including the current one, may be requested.
+    - Retention window for historical reports? **Assumed:** unconstrained in this draft.
+    - Timezone if a member's timezone changes mid-month? **Not addressed** — report
+      generation uses whatever timezone is on record for the member at request time.
+    - What identifying details does each entry need? **Assumed:** posted date/time,
+      merchant name, product category, original purchase amount, cashback amount.
+    - Are clawbacks linked back to the original purchase, or standalone? **Assumed:**
+      standalone (no cross-reference field) — flagged for revisit.
+    - Entry ordering? **Assumed:** chronological by `postedAt`, ascending.
+    - Can the reported total go negative, or does it floor at $0.00? **Assumed:**
+      it can go negative — matches the spec's own example table ($1.00 − $5.00 = −$4.00).
+    - Numeric "would-have-earned" figure for the cap, or just a flag? **Assumed:**
+      both — `capReached` flag plus a numeric `forfeitedAmount`.
+    - Is the cap value itself always shown? **Assumed:** no — omitted from the
+      response entirely in this draft; only `capReached` and `forfeitedAmount` are exposed.
+    - Joint accounts / agent access? **Out of scope** — this contract assumes the
+      caller is always the member requesting their own data; no auth scheme is
+      modelled here, consistent with the rest of this codebase's current controllers.
+  version: "1.0.0"
+
+servers:
+  - url: /api
+
+tags:
+  - name: Cashback Reports
+    description: Customer-facing monthly cashback report
+
+paths:
+  /customers/{customerId}/cashback/reports/{month}:
+    get:
+      tags: [Cashback Reports]
+      summary: Get a customer's cashback report for a given month
+      description: |
+        Returns every cashback event (earnings and clawbacks) posted for the
+        member during the requested calendar month, in the member's local
+        timezone, plus the monthly total and cap status.
+
+        A month with no qualifying activity is not an error: it returns 200
+        with an empty `entries` array and all totals at $0.00.
+      operationId: getMonthlyCashbackReport
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identifier of the member requesting their own report.
+          example: cust-00123
+        - name: month
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: >-
+            Calendar month in ISO-8601 YearMonth format (YYYY-MM), interpreted
+            in the member's local timezone.
+          example: "2026-03"
+      responses:
+        "200":
+          description: Monthly cashback report (possibly empty).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashbackMonthlyReport"
+              examples:
+                capReached:
+                  summary: Premium member who reached the monthly cap
+                  value:
+                    customerId: cust-00123
+                    month: "2026-03"
+                    entries:
+                      - postedAt: "2026-03-04T09:15:00Z"
+                        merchantName: GreenGrocer
+                        productCategory: Groceries
+                        purchaseAmount: 50.00
+                        cashbackAmount: 1.00
+                        entryType: EARNING
+                      - postedAt: "2026-03-10T17:42:00Z"
+                        merchantName: FuelCo
+                        productCategory: Fuel
+                        purchaseAmount: 30.00
+                        cashbackAmount: 0.60
+                        entryType: EARNING
+                      - postedAt: "2026-03-18T12:00:00Z"
+                        merchantName: GreenGrocer
+                        productCategory: Groceries
+                        purchaseAmount: -50.00
+                        cashbackAmount: -1.00
+                        entryType: CLAWBACK
+                    totalEarnings: 50.00
+                    totalClawbacks: 1.00
+                    reportedTotal: 49.00
+                    capReached: true
+                    forfeitedAmount: 3.00
+                empty:
+                  summary: No qualifying activity in the requested month
+                  value:
+                    customerId: cust-00123
+                    month: "2026-04"
+                    entries: []
+                    totalEarnings: 0.00
+                    totalClawbacks: 0.00
+                    reportedTotal: 0.00
+                    capReached: false
+                    forfeitedAmount: null
+        "400":
+          description: Malformed `month` path parameter (not YYYY-MM).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No member exists with the given `customerId`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    CashbackMonthlyReport:
+      type: object
+      description: A member's cashback activity and net total for one calendar month.
+      required:
+        - customerId
+        - month
+        - entries
+        - totalEarnings
+        - totalClawbacks
+        - reportedTotal
+        - capReached
+      properties:
+        customerId:
+          type: string
+          example: cust-00123
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          example: "2026-03"
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CashbackReportEntry"
+          description: >-
+            Cashback events only — non-qualifying purchases (e.g. gift cards)
+            never appear here. Ordered chronologically by `postedAt` (assumed;
+            unresolved in the spec).
+        totalEarnings:
+          type: number
+          format: decimal
+          multipleOf: 0.01
+          minimum: 0
+          description: Sum of all positive (earning) entries this month.
+          example: 50.00
+        totalClawbacks:
+          type: number
+          format: decimal
+          multipleOf: 0.01
+          minimum: 0
+          description: Sum of the absolute value of all clawback entries this month.
+          example: 1.00
+        reportedTotal:
+          type: number
+          format: decimal
+          multipleOf: 0.01
+          description: >-
+            Net sum of all entries (totalEarnings − totalClawbacks). May be
+            negative — flooring at $0.00 is an open question in the spec and
+            is NOT applied in this draft.
+          example: 49.00
+        capReached:
+          type: boolean
+          description: Whether the member's monthly cashback cap was reached this month.
+        forfeitedAmount:
+          type: number
+          format: decimal
+          multipleOf: 0.01
+          minimum: 0
+          nullable: true
+          description: >-
+            Cashback forfeited to the cap. Present only when `capReached` is
+            true; null/omitted otherwise.
+          example: 3.00
+      example:
+        customerId: cust-00123
+        month: "2026-03"
+        entries:
+          - postedAt: "2026-03-04T09:15:00Z"
+            merchantName: GreenGrocer
+            productCategory: Groceries
+            purchaseAmount: 50.00
+            cashbackAmount: 1.00
+            entryType: EARNING
+        totalEarnings: 1.00
+        totalClawbacks: 0.00
+        reportedTotal: 1.00
+        capReached: false
+        forfeitedAmount: null
+
+    CashbackReportEntry:
+      type: object
+      description: A single cashback earning or clawback line item.
+      required:
+        - postedAt
+        - merchantName
+        - cashbackAmount
+        - entryType
+      properties:
+        postedAt:
+          type: string
+          format: date-time
+          description: >-
+            Instant the cashback event posted. The report groups events by
+            this date in the member's local month, per the spec's timezone rule.
+          example: "2026-03-04T09:15:00Z"
+        merchantName:
+          type: string
+          example: GreenGrocer
+        productCategory:
+          type: string
+          nullable: true
+          example: Groceries
+        purchaseAmount:
+          type: number
+          format: decimal
+          multipleOf: 0.01
+          description: >-
+            Original purchase amount. Negative for a refund that produced a
+            clawback. Assumed field — the spec left "identifying details"
+            for an entry as an open question.
+          example: 50.00
+        cashbackAmount:
+          type: number
+          format: decimal
+          multipleOf: 0.01
+          description: >-
+            Signed cashback amount: positive for an earning, negative for a
+            clawback.
+          example: 1.00
+        entryType:
+          type: string
+          enum: [EARNING, CLAWBACK]
+          description: Distinguishes an earning line from a refund clawback line.
+
+    ErrorResponse:
+      type: object
+      description: >-
+        Default Spring Boot error body shape — this codebase has no custom
+        @ControllerAdvice yet, so this mirrors framework default behaviour
+        rather than a bespoke contract.
+      required:
+        - status
+        - error
+        - message
+        - path
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 404
+        error:
+          type: string
+          example: Not Found
+        message:
+          type: string
+          example: "No member found with id cust-00123"
+        path:
+          type: string
+          example: /api/customers/cust-00123/cashback/reports/2026-03
