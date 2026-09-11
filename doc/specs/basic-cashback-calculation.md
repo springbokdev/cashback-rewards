@@ -45,16 +45,17 @@ The 0% row is the boundary case: a partner merchant configured with no cashback 
 
 ---
 
-### Rule: Must round cashback to whole cents using banker's rounding (half-even)
+### Rule: Must round cashback down to whole cents (RoundingMode.DOWN)
 
 | Computed Cashback | Credited Cashback |
 |---|---|
-| $1.6649 | $1.66 |
-| $1.6650 | $1.66 |
-| $1.6651 | $1.67 |
-| $1.6750 | $1.68 |
+| $1.6600 | $1.66 |
+| $1.6699 | $1.66 |
+| $1.6700 | $1.67 |
 
-The two `.5`-exact rows show the half-even boundary: ties round to the nearest even cent.
+The $1.6699 row is the boundary case: DOWN rounding truncates rather than rounding to the nearest cent, so a value just short of the next cent is still not rounded up.
+
+> Superseded the original half-even (banker's rounding) rule to stay consistent with the Merchant Categories & Eligibility spec, which settled on RoundingMode.DOWN for category-based cashback. No code implemented half-even rounding, so this is a documentation-only correction.
 
 ---
 

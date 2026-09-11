@@ -34,25 +34,27 @@ class MerchantCategoriesAndEligibilityIT {
     ObjectMapper objectMapper;
 
     @Nested
-    @DisplayName("Rule: Should award cashback at the rate configured for the product category")
-    class AwardsCashbackAtTheConfiguredCategoryRate {
+    @DisplayName("Rule: Should award cashback at the rate for the transaction's merchant category, rounded down to whole cents")
+    class AwardsCashbackAtTheMerchantCategoryRateRoundedDown {
 
-        @ParameterizedTest(name = "The one where a $100.00 purchase in {1} (MCC {0}) earns ${3}")
+        @ParameterizedTest(name = "The one where a ${3} purchase in {1} (MCC {0}) earns ${4}")
         @CsvSource(textBlock = """
-                5411, Groceries, 0.02, 2.00
-                5541, Fuel,      0.01, 1.00
+                5411, Groceries, 0.02, 100.00, 2.00
+                5541, Fuel,      0.01, 100.00, 1.00
+                5411, Groceries, 0.02, 33.33,  0.66
                 """)
         void awardsCashbackAtTheConfiguredCategoryRate(String mcc,
                                                        String categoryName,
                                                        String categoryRate,
+                                                       String purchaseAmount,
                                                        String expectedCashback) throws Exception {
-            String customerId = "cust-cat-" + mcc;
-            String merchantName = "Merchant-" + categoryName;
+            String customerId = "cust-cat-" + mcc + "-" + purchaseAmount;
+            String merchantName = "Merchant-" + categoryName + "-" + purchaseAmount;
 
             registerCategory(mcc, categoryName, categoryRate);
             registerPartnerMerchant(merchantName);
 
-            recordPurchase(customerId, merchantName, "100.00", mcc);
+            recordPurchase(customerId, merchantName, purchaseAmount, mcc);
 
             List<CashbackRecord> records = cashbackFor(customerId);
 
@@ -61,6 +63,27 @@ class MerchantCategoriesAndEligibilityIT {
             assertThat(records.getFirst().productCategory()).isEqualTo(categoryName);
             assertThat(records.getFirst().cashbackAmount()).isEqualByComparingTo(expectedCashback);
         }
+
+        @Test
+        @DisplayName("The one where a supermarket charges at its own fuel station under MCC 5541 — it earns the Fuel rate, not Groceries")
+        void categorisesByTransactionMccNotMerchantBrand() throws Exception {
+            registerCategory("5411", "Groceries", "0.02");
+            registerCategory("5541", "Fuel", "0.01");
+            registerPartnerMerchant("SuperMart");
+
+            recordPurchase("cust-cat-brand", "SuperMart", "100.00", "5541");
+
+            List<CashbackRecord> records = cashbackFor("cust-cat-brand");
+
+            assertThat(records).hasSize(1);
+            assertThat(records.getFirst().productCategory()).isEqualTo("Fuel");
+            assertThat(records.getFirst().cashbackAmount()).isEqualByComparingTo("1.00");
+        }
+    }
+
+    @Nested
+    @DisplayName("Rule: Should apply the 0.5% default rate to transactions outside Groceries and Fuel")
+    class AppliesTheDefaultRateOutsideGroceriesAndFuel {
 
         @Test
         @DisplayName("The one where a $100.00 purchase with an unmapped MCC (5912 Pharmacy) falls back to the $0.50 default")
