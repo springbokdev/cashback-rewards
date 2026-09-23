@@ -83,6 +83,22 @@ class RecordPurchaseServiceTest {
     }
 
     @Test
+    @DisplayName("does not award cashback for a below-threshold purchase at a registered partner merchant with a mapped category")
+    void ignoresBelowThresholdPurchasesAtPartnerMerchants() {
+        InMemoryCategoryRepository categories = new InMemoryCategoryRepository();
+        InMemoryMerchantRepository merchants = new InMemoryMerchantRepository();
+        InMemoryCashbackRepository cashbacks = new InMemoryCashbackRepository();
+        categories.save(new ProductCategory("5411", "Groceries", new BigDecimal("0.02")));
+        merchants.save(new Merchant("GreenGrocer", true));
+        RecordPurchaseService service = new RecordPurchaseService(merchants, categories, cashbacks);
+
+        service.record("cust-005", "GreenGrocer", "5411", new BigDecimal("0.50"),
+                Instant.parse("2026-05-01T10:00:00Z"));
+
+        assertThat(cashbacks.findByCustomerId("cust-005")).isEmpty();
+    }
+
+    @Test
     @DisplayName("falls back to the configured default rate and the \"Other\" category for an unmapped MCC")
     void usesDefaultRateForUnmappedMcc() {
         InMemoryCategoryRepository categories = new InMemoryCategoryRepository();
